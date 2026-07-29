@@ -58,20 +58,24 @@ def run_pipeline(input_str, custom_script_text=None, generate_real_audio=True, m
     else:
         print(" [OK] Verificação pré-narração concluída com 100% de conformidade!")
 
-    # STEP 2: NARRATION AUDIO
+    # STEP 2: NARRATION AUDIO & OFFICIAL DARKPLANNER SRT
     narration_bytes = None
+    darkplanner_srt = None
     if generate_real_audio:
         if verification['is_valid']:
-            print("\n--- [ETAPA 2/3] GERANDO NARRAÇÃO NA DARKPLANNER API ---")
+            print("\n--- [ETAPA 2/3] GERANDO NARRAÇÃO E LEGENDA NA DARKPLANNER API ---")
             print(" Voz: Valentino (dc674015-b94c-4078-9538-4a7d1d612ce9)")
-            narration_bytes = generate_darkplanner_narration(script_body, title=title)
+            narration_bytes, darkplanner_srt = generate_darkplanner_narration(script_body, title=title)
         else:
             print("\n [!] Narração via API pausada até a adequação do texto.")
 
     # STEP 3: SRT PACING GENERATION & EXPORT
-    print("\n--- [ETAPA 3/3] GERANDO LEGENDA SRT E PACING VISUAL ---")
-    total_sec = duration_min * 60
-    srt_content = generate_srt_blocks(paragraphs, total_sec)
+    print("\n--- [ETAPA 3/3] SALVANDO ARQUIVO SRT E PACOTE DE EXPORTAÇÃO ---")
+    if darkplanner_srt:
+        srt_content = darkplanner_srt
+    else:
+        total_sec = duration_min * 60
+        srt_content = generate_srt_blocks(paragraphs, total_sec)
 
     out_dir, audio_path, srt_path = export_to_downloads(title, narration_bytes, srt_content)
     print(f" [OK] Pacote gerado com sucesso em:")

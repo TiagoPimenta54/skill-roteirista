@@ -153,7 +153,7 @@ def generate_darkplanner_narration(text, title="narracao"):
             resp_data = json.loads(res.read().decode('utf-8'))
             if not resp_data.get("success"):
                 print(f"[DarkPlanner API Error] {resp_data}")
-                return None
+                return None, None
             job_id = resp_data.get("job_id")
             print(f"[DarkPlanner API] Job {job_id} enviado. Processando narração...")
 
@@ -171,7 +171,7 @@ def generate_darkplanner_narration(text, title="narracao"):
                     break
                 elif st_data.get("status") in ["failed", "error"]:
                     print(f"[DarkPlanner API Failed] {st_data}")
-                    return None
+                    return None, None
 
         req_dl = urllib.request.Request(
             f"{DARK_PLANNER_BASE_URL}/download/{job_id}",
@@ -181,22 +181,37 @@ def generate_darkplanner_narration(text, title="narracao"):
         with urllib.request.urlopen(req_dl, context=ctx, timeout=10) as res_dl:
             dl_data = json.loads(res_dl.read().decode('utf-8'))
             audio_url = dl_data.get("audio_url")
+            srt_url = dl_data.get("srt_url") or dl_data.get("srt_tempo_url") or dl_data.get("srt_veo_url")
             
+            narration_bytes = None
+            srt_text = None
+
             if audio_url:
                 dl_headers = {"X-API-Key": DARK_PLANNER_API_KEY, "User-Agent": "Mozilla/5.0"}
-                req_audio = urllib.request.Request(audio_url, headers=dl_headers, method="GET")
                 try:
-                    with urllib.request.urlopen(req_audio, context=ctx, timeout=30) as res_a:
-                        return res_a.read()
+                    req_audio = urllib.request.Request(audio_url, headers=dl_headers, method="GET")
+                    with urllib.request.urlopen(req_audio, context=ctx, timeout=60) as res_a:
+                        narration_bytes = res_a.read()
                 except Exception:
                     req_audio_raw = urllib.request.Request(audio_url, headers={"User-Agent": "Mozilla/5.0"}, method="GET")
-                    with urllib.request.urlopen(req_audio_raw, context=ctx, timeout=30) as res_a:
-                        return res_a.read()
+                    with urllib.request.urlopen(req_audio_raw, context=ctx, timeout=60) as res_a:
+                        narration_bytes = res_a.read()
+
+            if srt_url:
+                try:
+                    req_srt = urllib.request.Request(srt_url, headers={"User-Agent": "Mozilla/5.0"}, method="GET")
+                    with urllib.request.urlopen(req_srt, context=ctx, timeout=30) as res_s:
+                        srt_text = res_s.read().decode('utf-8')
+                        print("[DarkPlanner API] Legenda SRT oficial baixada com sucesso do DarkPlanner!")
+                except Exception as e:
+                    print(f"[DarkPlanner API SRT Error] {e}")
+
+            return narration_bytes, srt_text
 
     except Exception as e:
         print(f"[DarkPlanner API Exception] {e}")
 
-    return None
+    return None, None
 
 def format_timestamp(seconds):
     hrs = int(seconds // 3600)
