@@ -93,5 +93,9 @@ def run_pipeline(input_str, custom_script_text=None, generate_real_audio=True, m
     }
 
 if __name__ == "__main__":
-    input_str = sys.argv[1] if len(sys.argv) > 1 else "A historia de JO, B1 10MIN"
-    run_pipeline(input_str)
+    if len(sys.argv) > 1:
+        input_str = sys.argv[1]
+        run_pipeline(input_str)
+    else:
+        print("Uso: python run_roteirista.py \"<Titulo>, <Codigo_Canal> <Duracao>\"")
+        print("Exemplo: python run_roteirista.py \"A historia de Moises, B1 20MIN\"")
