@@ -63,19 +63,18 @@ def run_pipeline(input_str, custom_script_text=None, generate_real_audio=True, m
     darkplanner_srt = None
     if generate_real_audio:
         if verification['is_valid']:
-            print("\n--- [ETAPA 2/3] GERANDO NARRAÇÃO E LEGENDA NA DARKPLANNER API ---")
+            print("\n--- [ETAPA 2/3] GERANDO NARRAÇÃO E LEGENDA POR TEMPO NA DARKPLANNER API ---")
             print(" Voz: Valentino (dc674015-b94c-4078-9538-4a7d1d612ce9)")
-            narration_bytes, darkplanner_srt = generate_darkplanner_narration(script_body, title=title)
+            narration_bytes, darkplanner_srt = generate_darkplanner_narration(script_body, title=title, media_mode=media_mode)
         else:
-            print("\n [!] Narração via API pausada até a adequação do texto.")
+            raise RuntimeError("Verificação pré-narração reprovada. Ajuste o roteiro antes de enviar para a API.")
 
-    # STEP 3: SRT PACING GENERATION & EXPORT
-    print("\n--- [ETAPA 3/3] SALVANDO ARQUIVO SRT E PACOTE DE EXPORTAÇÃO ---")
-    if darkplanner_srt:
-        srt_content = darkplanner_srt
-    else:
-        total_sec = duration_min * 60
-        srt_content = generate_srt_blocks(paragraphs, total_sec)
+    # STEP 3: EXPORTING DARKPLANNER AUDIO & SRT PACKAGE
+    print("\n--- [ETAPA 3/3] EXPORTANDO PACOTE DE LEGENDA POR TEMPO E ÁUDIO ---")
+    if not darkplanner_srt or not narration_bytes:
+        raise RuntimeError("FALHA CRÍTICA: O áudio ou a legenda por tempo (srtsynctempo.srt) não foram retornados pela API DarkPlanner.")
+
+    srt_content = darkplanner_srt
 
     out_dir, audio_path, srt_path = export_to_downloads(title, narration_bytes, srt_content)
     print(f" [OK] Pacote gerado com sucesso em:")

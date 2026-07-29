@@ -126,7 +126,7 @@ def pre_narration_verification(script_text, title, duration_min):
 
     return report
 
-def generate_darkplanner_narration(text, title="narracao"):
+def generate_darkplanner_narration(text, title="narracao", media_mode="V"):
     clean_narration_text = re.sub(r'\[[IV]\]', '', text).strip()
     ctx = ssl.create_default_context()
     headers = {
@@ -135,12 +135,27 @@ def generate_darkplanner_narration(text, title="narracao"):
         "User-Agent": "Mozilla/5.0"
     }
 
+    # Set subtitle timing parameters according to media mode
+    mode_str = str(media_mode).upper().strip()
+    if mode_str in ["V", "2", "BC", "B2"]:
+        # Video mode: 7 to 9 seconds
+        sub_min = 7
+        sub_max = 9
+    else:
+        # Image mode: 4 to 12 seconds
+        sub_min = 4
+        sub_max = 12
+
     payload = {
         "text": clean_narration_text,
         "voice_id": VALENTINO_VOICE_ID,
         "title": title,
-        "speed": 1.0
+        "speed": 1.0,
+        "subtitle_veo_min": sub_min,
+        "subtitle_veo_max": sub_max
     }
+
+    print(f"[DarkPlanner API] Enviando parâmetros de legenda por tempo: min={sub_min}s, max={sub_max}s")
 
     try:
         req = urllib.request.Request(
@@ -149,69 +164,74 @@ def generate_darkplanner_narration(text, title="narracao"):
             headers=headers,
             method="POST"
         )
-        with urllib.request.urlopen(req, context=ctx, timeout=15) as res:
+        with urllib.request.urlopen(req, context=ctx, timeout=30) as res:
             resp_data = json.loads(res.read().decode('utf-8'))
             if not resp_data.get("success"):
-                print(f"[DarkPlanner API Error] {resp_data}")
-                return None, None
+                raise RuntimeError(f"[DarkPlanner API Error] Falha ao enviar job: {resp_data}")
             job_id = resp_data.get("job_id")
-            print(f"[DarkPlanner API] Job {job_id} enviado. Processando narração...")
+            print(f"[DarkPlanner API] Job {job_id} enviado. Processando narração e legenda por tempo...")
 
-        for _ in range(40):
-            time.sleep(2)
+        for _ in range(60):
+            time.sleep(3)
             req_st = urllib.request.Request(
                 f"{DARK_PLANNER_BASE_URL}/status/{job_id}",
                 headers=headers,
                 method="GET"
             )
-            with urllib.request.urlopen(req_st, context=ctx, timeout=10) as res_st:
+            with urllib.request.urlopen(req_st, context=ctx, timeout=15) as res_st:
                 st_data = json.loads(res_st.read().decode('utf-8'))
                 if st_data.get("status") == "completed":
-                    print(f"[DarkPlanner API] Job {job_id} finalizado!")
+                    print(f"[DarkPlanner API] Job {job_id} finalizado com sucesso!")
                     break
                 elif st_data.get("status") in ["failed", "error"]:
-                    print(f"[DarkPlanner API Failed] {st_data}")
-                    return None, None
+                    raise RuntimeError(f"[DarkPlanner API Failed] O job falhou no servidor: {st_data}")
 
         req_dl = urllib.request.Request(
             f"{DARK_PLANNER_BASE_URL}/download/{job_id}",
             headers=headers,
             method="GET"
         )
-        with urllib.request.urlopen(req_dl, context=ctx, timeout=10) as res_dl:
+        with urllib.request.urlopen(req_dl, context=ctx, timeout=15) as res_dl:
             dl_data = json.loads(res_dl.read().decode('utf-8'))
             audio_url = dl_data.get("audio_url")
-            srt_url = dl_data.get("srt_url") or dl_data.get("srt_tempo_url") or dl_data.get("srt_veo_url")
+            # Usar estritamente a legenda por tempo (srt_tempo_url / srt_veo_url)
+            srt_tempo_url = dl_data.get("srt_tempo_url") or dl_data.get("srt_veo_url") or dl_data.get("srt_url")
             
             narration_bytes = None
             srt_text = None
 
-            if audio_url:
-                dl_headers = {"X-API-Key": DARK_PLANNER_API_KEY, "User-Agent": "Mozilla/5.0"}
-                try:
-                    req_audio = urllib.request.Request(audio_url, headers=dl_headers, method="GET")
-                    with urllib.request.urlopen(req_audio, context=ctx, timeout=60) as res_a:
-                        narration_bytes = res_a.read()
-                except Exception:
-                    req_audio_raw = urllib.request.Request(audio_url, headers={"User-Agent": "Mozilla/5.0"}, method="GET")
-                    with urllib.request.urlopen(req_audio_raw, context=ctx, timeout=60) as res_a:
-                        narration_bytes = res_a.read()
+            if not audio_url:
+                raise RuntimeError("[DarkPlanner API Error] audio_url não foi retornado pela API DarkPlanner.")
 
-            if srt_url:
-                try:
-                    req_srt = urllib.request.Request(srt_url, headers={"User-Agent": "Mozilla/5.0"}, method="GET")
-                    with urllib.request.urlopen(req_srt, context=ctx, timeout=30) as res_s:
-                        srt_text = res_s.read().decode('utf-8')
-                        print("[DarkPlanner API] Legenda SRT oficial baixada com sucesso do DarkPlanner!")
-                except Exception as e:
-                    print(f"[DarkPlanner API SRT Error] {e}")
+            dl_headers = {"X-API-Key": DARK_PLANNER_API_KEY, "User-Agent": "Mozilla/5.0"}
+            try:
+                req_audio = urllib.request.Request(audio_url, headers=dl_headers, method="GET")
+                with urllib.request.urlopen(req_audio, context=ctx, timeout=120) as res_a:
+                    narration_bytes = res_a.read()
+            except Exception:
+                req_audio_raw = urllib.request.Request(audio_url, headers={"User-Agent": "Mozilla/5.0"}, method="GET")
+                with urllib.request.urlopen(req_audio_raw, context=ctx, timeout=120) as res_a:
+                    narration_bytes = res_a.read()
+
+            if not srt_tempo_url:
+                raise RuntimeError("[DarkPlanner API Error] srt_tempo_url (legenda por tempo) não foi retornado pela API DarkPlanner.")
+
+            try:
+                req_srt = urllib.request.Request(srt_tempo_url, headers={"User-Agent": "Mozilla/5.0"}, method="GET")
+                with urllib.request.urlopen(req_srt, context=ctx, timeout=60) as res_s:
+                    srt_text = res_s.read().decode('utf-8')
+                    print("[DarkPlanner API] Legenda por tempo (srtsynctempo.srt) baixada com sucesso do DarkPlanner!")
+            except Exception as e:
+                raise RuntimeError(f"[DarkPlanner API SRT Error] Falha ao baixar legenda por tempo: {e}")
+
+            if not narration_bytes or not srt_text:
+                raise RuntimeError("[DarkPlanner API Error] Conteúdo de áudio ou legenda vazio retornado pela API.")
 
             return narration_bytes, srt_text
 
     except Exception as e:
-        print(f"[DarkPlanner API Exception] {e}")
-
-    return None, None
+        print(f"[DarkPlanner API Erro Crítico] {e}")
+        raise e
 
 def format_timestamp(seconds):
     hrs = int(seconds // 3600)
