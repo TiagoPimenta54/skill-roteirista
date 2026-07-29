@@ -14,7 +14,7 @@ from processor import (
 )
 from templates import get_gemini_instructions
 
-def run_pipeline(input_str, custom_script_text=None, generate_real_audio=False, media_mode="I"):
+def run_pipeline(input_str, custom_script_text=None, generate_real_audio=True, media_mode="I"):
     parsed = parse_title_input(input_str)
     title = parsed["title"]
     channel_code = parsed["channel_code"]

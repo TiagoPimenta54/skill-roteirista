@@ -23,8 +23,8 @@ def parse_title_input(input_str):
     """
     Parses input string into title, channel code, content type, and duration.
     Formats:
-    - 'A historia de JO, B1 10MIN' -> B1 = Bíblico Ilustrado
-    - 'A historia de JO, BC 10MIN' -> BC / B2 = Bíblico Cinematográfico
+    - 'A historia de jo, BI 10 min' -> BI / B1 = Bíblico Ilustrado
+    - 'A historia de jo, BC 10 min' -> BC / B2 = Bíblico Cinematográfico
     """
     cleaned = input_str.strip()
     match = re.search(r'^(.*?)[,\s]+([A-Za-z0-9]+)(?:[,\s]+([A-Za-z]))?[,\s]+(\d+)\s*(?:MIN|M)?$', cleaned, re.IGNORECASE)
@@ -44,16 +44,22 @@ def parse_title_input(input_str):
             title = " ".join(tokens[:-2]) if len(tokens) > 2 else "Video_Roteiro"
             rest = tokens[-2:]
 
-        channel_code = rest[0].upper() if len(rest) > 0 else "BC"
+        channel_code = rest[0].upper() if len(rest) > 0 else "BI"
         content_type = "C"
 
         dur_str = "10"
         for t in rest:
             m = re.search(r'(\d+)', t)
-            if m and t.upper() not in ["B1", "B2", "BC", "C1", "C2"]:
+            if m and t.upper() not in ["B1", "BI", "B2", "BC", "C1", "C2"]:
                 dur_str = m.group(1)
 
         duration_min = int(dur_str) if dur_str.isdigit() else 10
+
+    # Map BI to B1, BC to B2 for consistency
+    if channel_code in ["BI", "B1"]:
+        channel_code = "B1"
+    elif channel_code in ["BC", "B2"]:
+        channel_code = "BC"
 
     return {
         "title": title,
@@ -67,7 +73,7 @@ def detect_language(text):
     Robustly detects language (Portuguese, English, Spanish).
     """
     t_lower = text.lower()
-    pt_keywords = ["história", "historia", "que", "para", "com", "não", "nao", "uma", "um", "do", "da", "seu", "sua", "de", "em", "por", "sobre", "senhor", "deus"]
+    pt_keywords = ["história", "historia", "que", "para", "com", "não", "nao", "uma", "um", "do", "da", "seu", "sua", "de", "em", "por", "sobre", "senhor", "deus", "bíblia", "biblia"]
     en_keywords = ["the", "story", "of", "in", "and", "god", "bible", "life", "lord"]
     es_keywords = ["la", "el", "historia", "de", "dios", "biblia", "vida", "señor", "senor"]
     
@@ -91,7 +97,6 @@ def calculate_word_targets(duration_min):
     }
 
 def pre_narration_verification(script_text, title, duration_min):
-    # Strip tags if present for word count & language checks
     clean_text = re.sub(r'\[[IV]\]', '', script_text).strip()
     words = re.findall(r'\b\w+\b', clean_text)
     word_count = len(words)
@@ -122,7 +127,6 @@ def pre_narration_verification(script_text, title, duration_min):
     return report
 
 def generate_darkplanner_narration(text, title="narracao"):
-    # Strip any brackets/tags from narration text
     clean_narration_text = re.sub(r'\[[IV]\]', '', text).strip()
     ctx = ssl.create_default_context()
     headers = {
@@ -205,14 +209,6 @@ def format_timestamp(seconds):
     return f"{hrs:02d}:{mins:02d}:{secs:02d},{millis:03d}"
 
 def generate_srt_blocks(sentences, total_duration_sec):
-    """
-    Generates clean SRT subtitle blocks with timing.
-    IMPORTANT: SRT subtitle lines are 100% CLEAN (NO [I], NO [V] tags inside subtitles).
-    
-    Pacing Rules:
-    - 00:00 to 01:00 (1st min): 3.0s - 6.0s
-    - > 01:00 (after 1st min): 7.0s - 9.5s (or 4.0s - 15.0s)
-    """
     srt_blocks = []
     current_time = 0.0
     num_sentences = len(sentences)
@@ -224,7 +220,6 @@ def generate_srt_blocks(sentences, total_duration_sec):
         if not clean_text:
             continue
 
-        # Strip any [I], [V] or scene prefixes to leave PURE subtitle text
         text_content = re.sub(r'^\[[IV]\]\s*', '', clean_text).strip()
         text_content = re.sub(r'^Cena\s+\d+:\s*', '', text_content).strip()
 
@@ -262,8 +257,8 @@ def export_to_downloads(title, narration_bytes, srt_content):
         with open(audio_path, "wb") as f:
             f.write(narration_bytes)
     else:
-        with open(audio_path, "wb") as f:
-            f.write(b"AUDIO_PLACEHOLDER_DARK_PLANNER_API")
+        print("[!] Narração não foi gerada ou falhou. O arquivo narracao.mp3 não será criado sem o áudio real.")
+        audio_path = None
 
     with open(srt_path, "w", encoding="utf-8") as f:
         f.write(srt_content)
