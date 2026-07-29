@@ -19,36 +19,36 @@ def get_gemini_instructions(channel_code, media_mode="V"):
     """
     channel_code = str(channel_code).upper().strip()
     mode_str = str(media_mode).upper().strip()
-    is_video = mode_str in ["V", "2", "VIDEO", "VIDEOS"] or True  # Defaulting video mode if requested
+    is_video = mode_str in ["V", "2", "VIDEO", "VIDEOS"] or True
 
-    # 1. Determine Channel Name and Visual Style
+    # 1. Determine Channel Style
     if channel_code in ["B2", "BC", "BIBLICO_CINEMATOGRAFICO"]:
         channel_name = "Bíblico Cinematográfico (BC)"
-        visual_style = "Reconstrução histórica hiper-realista por IA. Fidelidade total à época bíblica, representando personagens, trajes de época, cenários bíblicos imponentes, iluminação dramática (golden hour, chiaroscuro) e estética cinematográfica 8K."
-        img_prompt_rule = "iniciando pela DESCRIÇÃO DA CENA HISTÓRICA e colocando a especificação técnica de iluminação/estética no final."
-        vid_prompt_rule = "iniciando pela DESCRIÇÃO DA AÇÃO E MOVIMENTO DOS PERSONAGENS na cena e colocando as especificações técnicas de câmera e vídeo no final."
-        vid_example = "[V] Job standing in his tunic looking at the vast desert sunset in ancient Uz as his livestock grazes in the distance, cinematic 8K video, hyper-realistic historical reconstruction, epic lighting, smooth camera panning, slow motion"
+        visual_style = "Reconstrução histórica hiper-realista por IA. Fidelidade total à época bíblica (trajes de época, personagens, arquitetura bíblica, iluminação dramática natural)."
+        vid_prompt_rule = "em PROSA FLUIDA E LINGUAGEM NATURAL CINEMATOGRÁFICA. OBRIGATÓRIO: NÃO use listas de palavras-chave ou tags separadas por vírgula (como ', 8k, photorealistic, slow motion'). Integre o movimento de câmera, a iluminação e a ação dos personagens de forma fluida em uma frase descritiva contínua."
+        vid_example = "[V] A smooth cinematic camera shot glides slowly past ancient stone pillars at golden hour, revealing Job in traditional period garments praying quietly as a warm breeze moves his tunic."
+        img_prompt_rule = "iniciando pela descrição da cena e colocando especificações técnicas no final."
     elif channel_code == "B1":
         channel_name = "Bíblico Ilustrado (B1)"
-        visual_style = "Video Scribe, Whiteboard Explainer (Desenho Explicativo). Ilustrações didáticas COLORIDAS (vibrant colors), preenchimento com cores vivas e suaves, traços pretos limpos e marcantes em fundo branco puro."
-        img_prompt_rule = "iniciando pela DESCRIÇÃO DA CENA e colocando as especificações técnicas no final."
-        vid_prompt_rule = "iniciando pela DESCRIÇÃO DA AÇÃO DO DESENHO na tela e colocando as especificações técnicas no final."
-        vid_example = "[V] Colorful whiteboard scribe animation of Job praying in ancient Uz, smooth drawing effect, colorful digital line art on pure white background, no hands, no pens"
+        visual_style = "Video Scribe, Whiteboard Explainer COLORIDO em fundo branco limpo."
+        vid_prompt_rule = "em prosa fluida descrevendo o desenho sendo animado na tela em tempo real sem usar tags separadas por vírgula."
+        vid_example = "[V] A vivid whiteboard scribe animation smoothly draws Job praying in ancient Uz with colorful digital lines on a clean white background, free of hands or drawing tools."
+        img_prompt_rule = "iniciando pela descrição da cena e colocando especificações técnicas no final."
     else:
         channel_name = f"Canal Cinematográfico ({channel_code})"
-        visual_style = f"Reconstrução histórica e estética por IA para o canal {channel_code}."
-        img_prompt_rule = "iniciando pela descrição da cena com detalhes técnicos no final."
-        vid_prompt_rule = "iniciando pela descrição da ação visual com especificações técnicas no final."
-        vid_example = f"[V] Cinematic scene for {channel_code} showing realistic historical reconstruction, 8K video, cinematic camera movement, dramatic lighting"
+        visual_style = f"Reconstrução estética por IA adaptada para o canal {channel_code}."
+        vid_prompt_rule = "em linguagem natural fluida sem tags separadas por vírgula."
+        vid_example = f"[V] A cinematic video shot glides past the historic scene for {channel_code}, depicting characters and atmosphere naturally in motion."
+        img_prompt_rule = "iniciando pela descrição da cena com especificações no final."
 
     # Build Mode-Specific Prompt
     if is_video:
         target_model = "Veo 3 (Vídeo Cinematográfico)"
         specific_rules = f"""1. Leia o arquivo 'legenda.srt' anexo. Cada bloco do SRT corresponde a EXATAMENTE 1 Vídeo.
 2. Para CADA bloco do SRT, gere 1 prompt detalhado de vídeo em Inglês para o Veo 3 {vid_prompt_rule}
-3. ESTRUTURA OBRIGATÓRIA DO PROMPT DE VÍDEO:
-   - PRIMEIRO: Descreva a AÇÃO E CENA DO VÍDEO (o que se vê, os personagens agindo, o movimento físico e o ambiente).
-   - FINAL: Adicione as ESPECIFICAÇÕES TÉCNICAS DE VÍDEO E CÂMERA no final do prompt (ex: , cinematic 8K video, hyper-realistic historical reconstruction, epic dramatic lighting, smooth cinematic camera panning, slow motion).
+3. REGRAS OBRIGATÓRIAS PARA O VEO 3 (PROSA FLUIDA):
+   - PROIBIDO USAR TAGS SEPARADAS POR VÍRGULA: NÃO escreva ', 8k, photorealistic, hyper-realistic, slow motion, cinematic panning' no final do prompt.
+   - LINGUAGEM NATURAL E CONTÍNUA: Integre o tipo de enquadramento, a ação dos personagens, a iluminação e o movimento de câmera em um único parágrafo/frase fluida e visual em Inglês.
 4. Inicie CADA linha do prompt gerado obrigatoriamente com a tag [V].
 5. O número total de prompts gerados DEVE ser EXATAMENTE igual ao número de blocos do arquivo SRT (N blocos = N Prompts)."""
         example = vid_example
@@ -56,11 +56,8 @@ def get_gemini_instructions(channel_code, media_mode="V"):
         target_model = "nano banana 2"
         specific_rules = f"""1. Leia o arquivo 'legenda.srt' anexo. Cada bloco do SRT corresponde a EXATAMENTE 1 Imagem.
 2. Para CADA bloco do SRT, gere 1 prompt detalhado de imagem em Inglês para o nano banana 2 {img_prompt_rule}
-3. ESTRUTURA OBRIGATÓRIA DO PROMPT:
-   - PRIMEIRO: Descreva a CENA (o que se vê, os personagens, as ações e os objetos).
-   - FINAL: Adicione as ESPECIFICAÇÕES TÉCNICAS no final do prompt.
-4. Inicie CADA linha do prompt gerado obrigatoriamente com a tag [I].
-5. O número total de prompts gerados DEVE ser EXATAMENTE igual ao número de blocos do arquivo SRT (N blocos = N Prompts)."""
+3. Inicie CADA linha do prompt gerado obrigatoriamente com a tag [I].
+4. O número total de prompts gerados DEVE ser EXATAMENTE igual ao número de blocos do arquivo SRT (N blocos = N Prompts)."""
         example = "[I] Job kneeling and praying reverently under a peaceful sky in ancient Uz, surrounded by his livestock, colorful whiteboard explainer illustration, vibrant colorized line art on pure white background, no borders, no frame, no hands, no pens"
 
     instruction_text = f"""Você é um Engenheiro de Prompts especialista em geração de assets visuais para o {target_model}.
@@ -75,7 +72,7 @@ Retorne APENAS os prompts em Inglês. NÃO inclua títulos, cabeçalhos, marcado
 
 Exemplo de saída esperada:
 {example}
-{example}
+[V] A dramatic low-angle camera shot tracks a messenger running frantically across the dusty desert valley of Uz to deliver urgent news to Job under a tempestuous sky.
 
 Analise o arquivo 'legenda.srt' anexo e gere a lista completa de prompts agora.
 """
