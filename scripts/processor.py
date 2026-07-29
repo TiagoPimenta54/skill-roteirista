@@ -91,7 +91,9 @@ def calculate_word_targets(duration_min):
     }
 
 def pre_narration_verification(script_text, title, duration_min):
-    words = re.findall(r'\b\w+\b', script_text)
+    # Strip tags if present for word count & language checks
+    clean_text = re.sub(r'\[[IV]\]', '', script_text).strip()
+    words = re.findall(r'\b\w+\b', clean_text)
     word_count = len(words)
     targets = calculate_word_targets(duration_min)
 
@@ -99,7 +101,7 @@ def pre_narration_verification(script_text, title, duration_min):
     diff_pct = round(((word_count - targets["target"]) / targets["target"]) * 100, 2)
 
     title_lang = detect_language(title)
-    script_lang = detect_language(script_text[:500])
+    script_lang = detect_language(clean_text[:500])
     lang_passed = (title_lang == script_lang)
 
     is_all_valid = word_count_passed and lang_passed
@@ -120,6 +122,8 @@ def pre_narration_verification(script_text, title, duration_min):
     return report
 
 def generate_darkplanner_narration(text, title="narracao"):
+    # Strip any brackets/tags from narration text
+    clean_narration_text = re.sub(r'\[[IV]\]', '', text).strip()
     ctx = ssl.create_default_context()
     headers = {
         "X-API-Key": DARK_PLANNER_API_KEY,
@@ -128,7 +132,7 @@ def generate_darkplanner_narration(text, title="narracao"):
     }
 
     payload = {
-        "text": text,
+        "text": clean_narration_text,
         "voice_id": VALENTINO_VOICE_ID,
         "title": title,
         "speed": 1.0
@@ -201,6 +205,14 @@ def format_timestamp(seconds):
     return f"{hrs:02d}:{mins:02d}:{secs:02d},{millis:03d}"
 
 def generate_srt_blocks(sentences, total_duration_sec):
+    """
+    Generates clean SRT subtitle blocks with timing.
+    IMPORTANT: SRT subtitle lines are 100% CLEAN (NO [I], NO [V] tags inside subtitles).
+    
+    Pacing Rules:
+    - 00:00 to 01:00 (1st min): 3.0s - 6.0s
+    - > 01:00 (after 1st min): 7.0s - 9.5s (or 4.0s - 15.0s)
+    """
     srt_blocks = []
     current_time = 0.0
     num_sentences = len(sentences)
@@ -212,22 +224,14 @@ def generate_srt_blocks(sentences, total_duration_sec):
         if not clean_text:
             continue
 
-        if clean_text.startswith(("[I]", "[V]")):
-            tag = clean_text[:3]
-            text_content = clean_text[3:].strip()
-        else:
-            tag = "[V]"
-            text_content = clean_text
-
-        is_video = (tag == "[V]")
+        # Strip any [I], [V] or scene prefixes to leave PURE subtitle text
+        text_content = re.sub(r'^\[[IV]\]\s*', '', clean_text).strip()
+        text_content = re.sub(r'^Cena\s+\d+:\s*', '', text_content).strip()
 
         if current_time < 60.0:
             clip_duration = min(6.0, max(3.0, (total_duration_sec - current_time) / (num_sentences - idx + 1)))
         else:
-            if is_video:
-                clip_duration = min(9.5, max(7.0, (total_duration_sec - current_time) / (num_sentences - idx + 1)))
-            else:
-                clip_duration = min(15.0, max(4.0, (total_duration_sec - current_time) / (num_sentences - idx + 1)))
+            clip_duration = min(9.5, max(7.0, (total_duration_sec - current_time) / (num_sentences - idx + 1)))
 
         start_time = current_time
         end_time = min(total_duration_sec, current_time + clip_duration)
@@ -237,7 +241,7 @@ def generate_srt_blocks(sentences, total_duration_sec):
         start_str = format_timestamp(start_time)
         end_str = format_timestamp(end_time)
 
-        srt_block = f"{idx}\n{start_str} --> {end_str}\n{tag} {text_content}\n"
+        srt_block = f"{idx}\n{start_str} --> {end_str}\n{text_content}\n"
         srt_blocks.append(srt_block)
 
         current_time = end_time
